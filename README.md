@@ -123,3 +123,72 @@ The evaluation included:
 - Training vs. validation performance
 
 Comparing training and validation results also helped identify models
+
+🏆 Final Model
+
+After selecting Boosted C5.0, I refit the model using the full Titanic training dataset.
+
+The final model achieved:
+
+Training Accuracy: 87.8%
+
+Training Kappa: 0.7405
+
+I then used the refitted model to predict passenger survival in the unseen Kaggle test dataset.
+
+The predictions were exported in the required format:
+
+PassengerId | Survived
+
+and submitted to the Kaggle Titanic competition.
+
+Kaggle Score
+
+0.76555
+
+🛠️ Tools
+
+This project was completed in R using RStudio and Quarto.
+
+Key packages included:
+
+tidymodels
+C50
+ranger
+glmnet
+kknn
+naivebayes
+yardstick
+ggplot2
+
+💡 What I Learned
+
+This project gave me experience working through a complete classification workflow rather than focusing on a single algorithm.
+
+Some of my main takeaways were:
+
+Establishing a baseline before comparing more complex models
+
+Separating training, validation, and test data
+
+Using cross-validation for hyperparameter tuning
+
+Applying different preprocessing strategies depending on the model
+
+Comparing models with more than one performance metric
+
+Recognizing potential overfitting by comparing training and validation results
+
+Refitting a selected model using the complete training dataset
+
+Generating predictions for previously unseen observations
+
+Preparing predictions for a Kaggle competition
+
+Most importantly, this project reinforced that the model with the highest training accuracy is not necessarily the model that will perform best on unseen data.
+
+🙏 Acknowledgment
+
+Special thanks to Professor Suess for designing and assigning this midterm project for STAT 652: Statistical Learning. The assignment provided a hands-on opportunity to apply classification models, cross-validation, model tuning, and evaluation to a real machine learning problem.
+
+This project is shared publicly on GitHub with permission.
