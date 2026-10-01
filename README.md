@@ -124,7 +124,7 @@ The evaluation included:
 
 Comparing training and validation results also helped identify models
 
-🏆 Final Model
+## 🏆 Final Model
 
 After selecting Boosted C5.0, I refit the model using the full Titanic training dataset.
 
@@ -137,21 +137,22 @@ Training Kappa: 0.7405
 I then used the refitted model to predict passenger survival in the unseen Kaggle test dataset.
 
 The predictions were exported in the required format:
-
+```text
 PassengerId | Survived
-
+```
 and submitted to the Kaggle Titanic competition.
 
-Kaggle Score
+### **Kaggle Score**
 
-0.76555
+**0.76555**
 
-🛠️ Tools
+## 🛠️ Tools
 
 This project was completed in R using RStudio and Quarto.
 
 Key packages included:
 
+```text
 tidymodels
 C50
 ranger
@@ -160,8 +161,8 @@ kknn
 naivebayes
 yardstick
 ggplot2
-
-💡 What I Learned
+```
+## 💡 What I Learned
 
 This project gave me experience working through a complete classification workflow rather than focusing on a single algorithm.
 
@@ -187,7 +188,7 @@ Preparing predictions for a Kaggle competition
 
 Most importantly, this project reinforced that the model with the highest training accuracy is not necessarily the model that will perform best on unseen data.
 
-🙏 Acknowledgment
+## 🙏 Acknowledgment
 
 Special thanks to Professor Suess for designing and assigning this midterm project for STAT 652: Statistical Learning. The assignment provided a hands-on opportunity to apply classification models, cross-validation, model tuning, and evaluation to a real machine learning problem.
 
