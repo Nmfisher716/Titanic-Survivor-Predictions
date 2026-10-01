@@ -1,0 +1,1242 @@
+---
+title: "Statistics 652 - Titanic Data Predictions Midterm"
+author: "Nicholas Fisher"
+date: today
+format: 
+  html:
+    embed-resources: true
+toc: true
+execute:
+  warning: FALSE
+  message: FALSE
+---
+
+**Instructions:**  Do your best to develop the models using the R tidymodels package.  You can use the GitHub Copilot code completion to work on the code.  Please note the there is a subdirectory in the R Project that contains R tidymodels code for all of the models you are required to build.  You can use that code as a starting point for your work.  I would suggest updating the code to use the new tidymodels workflow() function.
+
+# Midterm
+
+### Question 0
+
+Have you used AI during the development of this midterm questions 1 and 2?  If so, please describe how you used it.  If not, please describe why you did not use it.
+
+### **Answer:**
+Yes. For Question 2, I used Chat GPT to help me with the code for tuning the models and running k-folds. I also had chat help me create the visualizations for the accuracy table and the validation table.
+
+### Question 1
+
+Clearly state the 5 steps for applying Machine Learning to a problem.
+
+### **Answer:**
+
+- Step 1: Determine the data to be used and where it will come from. Have a clear plan to when the data is collected and what are the variables involved in the data collection.
+
+- Step 2: Load the data into your software within a Project Folder.  Clean the data. Remove ID variables, compare the data to any test data. There may be missing factors in the training or test data. Consider altering catagorical variables, if able to trunkate them or cluster them into groups it may be more representative of the whole data. Missing data does not mean to drop the rows in numerical data consider averaging or taking the median of numerical value to replace the NA. Use AutoEDA package to check for NA's. Consider investigating the counts of a factored variable to the outcome. Viewing counts of the outcome varible in a factor can provide initial insight into a group's performance.
+
+- Step 3: Develop the models you plan to investigate. To see how parameters should be tuned with large datasets, consider running an initial check on the model to see how long it takes to process the data. Then consider the number of tunes to run on the model after the initial check of the length of the model. Compare the Null model to all models created, it will be a baseline to know if the models are improving the predictions. Consider using log loss/ROC in probability predictions, Accuracy/Kappa in binary predictions.
+
+- Step 4: Fit the models you plan to consider from Step 3. Record the accuracies, confusion matrix, any visualizations to help explain how the model is performing compared to other models.
+
+- Step 5: Try to improved the models and determine what the final model is. After finding the predictions and best model consider rerunning the model with different tunes or boosting the model. Make the data presentable in a visualization or table as to why the model was chosen. 
+
+### Question 2
+
+For the [titanic](https://www.kaggle.com/c/titanic/data) data set try the following machine learning classification algorithms.
+
+Use the training and test datasets from the **titanic** R package.
+
+You should note that the *titanic_train* has the *Survived* variable and the *titanic_test* does not.  So to select your best model you need to use the *titanic_train* dataset to train and test your models.  So that means you will need to select a training dataset from *titanic_train* and select a testing dataset (this would be a validation dataset) from *titanic_train* to evaluate the models you try.
+
+I have not demonstrated the use of cross-validation, once you are comfortable running all of the models see if you can figure out how to use cross-validation to pick the best model.
+
+Once you have picked the best model you should do the following:
+
+1. Re-run your chosen model on the full *titanic_train* dataset.
+2. Then produce predictions for the *titanic_test* dataset.  This is what you would submit in a .csv to [Kaggle](https://www.kaggle.com/) in a competition.
+
+Build **classification models** for the *Survived* variable. Pick an appropriate model scoring function, i.e. metric, and determine which model is the best. I would suggest making a confusion matrix and computing the accuracy or kappa. 
+
+0. Null Model
+1. kNN (the sample code given did not scale or normalize, if you use this model you need to do that.)
+2. Boosted C5.0 
+3. Random Forest
+4. Logistic Regression using regularization
+5. Naive Bayes
+
+### **Answer**
+My workflow to answer the question is in the models section. The Kappa for the whole training dataset is 0.7404776 and the Accuracy for the whole training set is 87.8%. The code I used at the end for my best model is [here](#best-model). I share my results for all the models accuracy and Kappa in the [*Accuracy Table*](#accuracy-table) and [*Kappa Table*](#kappa-table).	
+
+### Question 3
+
+Use AI to help you with the code development for implementing Cross-Validation.  You can use [ChatGPT](https://chatgpt.com/), [Copliot](https://m365.cloud.microsoft/chat), [Codex](https://chatgpt.com/codex), [Antigravity](https://antigravity.google/), etc. 
+
+Make one plot containing all of the ROC curves for the algorithms trained.
+
+### **Answer:**
+```{r}
+#| echo: false
+library(tidymodels)
+readRDS("ROC_model")
+readRDS("AUC_model")
+
+```
+
+The code for the ROC model is at the bottom of my midterm. Although AUC claims Random Forests and KNN have better classifications than Boosted C5.0. My Kappa and Accuracy have claimed Boosted C5.0 has the better model. For model selection for the Kaggle Competition I will be choosing Boosted C5.0 with 11 trees for my model specification. [ROC Code](#ROC)
+
+# Load Data and Packages
+
+```{r}
+#| eval: false
+
+
+library(pacman)
+p_load(readr, tidyverse, naivebayes, glmnet, randomForest, tidymodels, leaps, 
+       kknn, yardstick, parsnip, mdsr, olsrr, skimr, C50, ranger,
+       rpart, partykit, pROC, modelr, rsample, car, discrim, klaR)
+
+
+titanic_train <- read.csv("train.csv")
+titanic_test <- read.csv("test.csv")
+
+data(titanic_train)
+data(titanic_test)
+
+head(titanic_train)
+head(titanic_test)
+```
+# Data Cleaning
+In previous experience of classification models I have learned the test data may not carry the same factored levels as the training data. I will clean the training data and testing data they are compatible with each other. From my cleaning I changed `Cabin` to go by first letter only ("C538" = "C", "B384" = "B", ...,). I found one observation for `Cabin` in the training data which is not located in the test data `Cabin` "T", I decided to drop it since it was not in the testing data. I checked the training and the test data to confirm every observation had the same cabin floor level. I then factored `Sex`, `Ticket` `Class`, `Cabin`, `SibSp` and `Embarked`. Using `AutoEDA` package I found NA's in `Age` and `Fare` group. I changed NA's in `Age` to the median age on the ship and changed NAs in the fare group to be the average `Fare` price. These calculations came from reviewing what other people did in the Kaggle competition as well as from my own research of the datasets. I then found `Cabin` and `Embarked` had missing observations so I transformed them into each having an "unknown" group. I then dropped the ID variables `Ticket`, `Name` and `PassengerID`.
+
+## Data Cleaning Code
+```{r}
+#| eval: false
+
+#change Cabin to Letter in Testing Data.
+titanic_train <- titanic_train |>
+  dplyr::mutate(Cabin = substr(Cabin, 1, 1))
+
+#Factor training data
+titanic_train <- titanic_train |>
+  dplyr::mutate(across(c(Sex, Pclass, Survived, Cabin, SibSp, Embarked), as.factor))
+
+#Set NA Age to Median Value
+titanic_train <- titanic_train |>
+  dplyr::mutate(
+    Age = replace_na(
+      Age,
+      median(Age, na.rm = TRUE)
+    )
+  )
+
+#Drop observation for Cabin "T"
+titanic_train <- titanic_train[-340, ]
+
+#Change Cabin to Letter in Testing data.
+titanic_test <- titanic_test |>
+  dplyr::mutate(Cabin = substr(Cabin, 1, 1))
+
+#Factor features for Test data
+titanic_test <- titanic_test |>
+  dplyr::mutate(across(c(Sex, Pclass, Cabin, SibSp, Embarked), as.factor))
+
+#Convert Age to median in Test data
+titanic_test <- titanic_test |>
+  dplyr::mutate(
+    Age = replace_na(
+      Age,
+      median(Age, na.rm = TRUE)
+    )
+  )
+
+#Change NA Fare to median in test data.
+titanic_test <- titanic_test |>
+  dplyr::mutate(
+    Fare = replace_na(
+      Fare,
+      median(Fare, na.rm = TRUE)
+    )
+  )
+
+#Change missing rows to "Unknown" in training data
+titanic_test <- titanic_test |>
+  dplyr::mutate(
+    Cabin = as.character(Cabin),
+    Embarked = as.character(Embarked),
+    
+    Cabin = ifelse(Cabin == "", "Unknown", Cabin),
+    Embarked = ifelse(Embarked == "", "Unknown", Embarked),
+    
+    Cabin = factor(Cabin),
+    Embarked = factor(Embarked)
+  )
+
+#Change missing rows to "Unknown" in test data
+titanic_train <- titanic_train |>
+  dplyr::mutate(
+    Cabin = as.character(Cabin),
+    Embarked = as.character(Embarked),
+    
+    Cabin = ifelse(Cabin == "", "Unknown", Cabin),
+    Embarked = ifelse(Embarked == "", "Unknown", Embarked),
+    
+    Cabin = factor(Cabin),
+    Embarked = factor(Embarked)
+  )
+
+sum(is.na(titanic_test$Fare))
+#drop name, ticket, cabin,
+
+
+# create_report(titanic_train)
+# create_report(titanic_test)
+
+#Check for different levels in factor variables.
+factor_cols <- names(titanic_train)[sapply(titanic_train, is.factor)]
+
+for (col in factor_cols) {
+  new_levels <- setdiff(
+    unique(titanic_test[[col]]),
+    unique(titanic_train[[col]])
+  )
+  
+  if (length(new_levels) > 0) {
+    cat(col, ":", new_levels, "\n")
+  }
+}
+
+titanic_train <- titanic_train |>
+  dplyr::select(-c(Ticket, Name, PassengerId))
+
+titanic_test <- titanic_test |>
+  dplyr::select(-c(Ticket, Name))
+
+set.seed(134928) 
+titanic_parts <- titanic_train |>
+  initial_split(prop = .75)
+titan_train <- titanic_parts |>
+  training()
+titan_valid <- titanic_parts |>
+  testing()
+```
+
+
+# Model 0 Null Model
+
+### **Answer:**
+```{r}
+#| echo: false
+
+
+readRDS("null_valid_conf_plot")
+readRDS("accuracy_null_valid")|>
+  knitr::kable()
+```
+From our Validation data, Our Null Model we gives us an accuracy of 64.1%. Our Null Model follows the logic that everyone did not survive the Titanic. Our Null model did not require any tuning and will be the baseline measure to compare for the other models. We had 143 true positives and 80 False positives from our Null Model.
+
+### **Code and Comments:**
+
+```{r}
+#| eval: false
+
+# creating the model
+mod_null <- logistic_reg(mode = "classification") %>%
+  set_engine("glm") %>%
+  fit(Survived ~ 1, data = titan_train)
+
+saveRDS(mod_null, "mod_null.rds")
+
+#Creating the predicted class on the training data
+titan_pred_train <- titan_train |>
+  dplyr::select(Survived) |>
+  bind_cols(predict(mod_null, new_data = titan_train, type = "class")) |>
+  rename(survived_null = .pred_class)
+
+#Confusion Matrix on training data
+confusion_null_train <- titan_pred_train |>
+  conf_mat(truth = Survived, estimate = survived_null)
+
+autoplot(confusion_null_train) +
+  labs(title = "Null Training Data Confusion Matrix")+
+    geom_label(aes(
+      x = (xmax + xmin) / 2, 
+      y = (ymax + ymin) / 2, 
+      label = c("TN", "FP", "FN", "TP")))
+
+# Accuracy Results on the training
+accuracy(titan_pred_train, Survived, survived_null)
+
+# Validation data Prediction Class 
+titan_pred_valid <- titan_valid |>
+  dplyr::select(Survived) |>
+  bind_cols(predict(mod_null, new_data = titan_valid, type = "class")) |>
+  rename(survived_null = .pred_class)
+
+# Confusion Matrix on Null model Validation Data
+confusion_null_valid <- titan_pred_valid |>
+  conf_mat(truth = Survived, estimate = survived_null)
+
+
+null_valid_conf_plot <- autoplot(confusion_null_valid) +
+  labs(title = "Null Validation Data Confusion Matrix")+
+    geom_label(aes(
+      x = (xmax + xmin) / 2, 
+      y = (ymax + ymin) / 2, 
+      label = c("TN", "FP", "FN", "TP")))
+
+saveRDS(confusion_null_valid, "confusion_null_valid")
+saveRDS(null_valid_conf_plot, "null_valid_conf_plot")
+
+# Accuracy of the Validation Data with the null model
+accuracy_null_valid <- accuracy(titan_pred_valid, Survived, survived_null)
+saveRDS(accuracy_null_valid, "accuracy_null_valid")
+```
+
+# Model 1 kNN
+
+### **Answer:**
+```{r}
+#| echo: false
+
+
+
+readRDS("knn_valid_conf_plot")
+readRDS("accuracy_knn_valid") |>
+  knitr::kable()
+```
+We tuned K and have K=17 as our best model. Our accuracy for the validation data is 83.4% Our confusion Matrix has also increased in our true negatives.
+
+### **Code and Comments:**
+
+```{r}
+#| eval: false
+
+knn_spec <- nearest_neighbor(
+  neighbors = tune(),
+  weight_func = "rectangular",
+  dist_power = 2
+) |>
+  set_engine("kknn") |>
+  set_mode("classification")
+
+set.seed(2435)
+
+knn_folds <- vfold_cv(
+  titan_train,
+  v = 5,
+  strata = Survived
+)
+
+knn_recipe <- recipe(Survived ~ ., data = titan_train) |>
+  step_impute_median(all_numeric_predictors()) |>
+  step_unknown(all_nominal_predictors()) |>
+  step_dummy(all_nominal_predictors()) |>
+  step_normalize(all_numeric_predictors())
+
+knn_wf <- workflow() |>
+  add_recipe(knn_recipe) |>
+  add_model(knn_spec)
+knn_grid <- tibble(
+  neighbors = 1:30
+)
+
+set.seed(123)
+
+knn_tune <- tune_grid(
+  knn_wf,
+  resamples = knn_folds,
+  grid = knn_grid,
+  metrics = metric_set(accuracy)
+)
+collect_metrics(knn_tune)
+
+best_knn <- select_best(
+  knn_tune,
+  metric = "accuracy"
+)
+
+best_knn
+
+
+
+
+#training KNN model with K = 17
+knn_mod <- 
+  nearest_neighbor(weight_func = "rectangular", neighbors = 17) |> 
+  set_mode("classification") |> 
+  set_engine("kknn") |> 
+  fit(Survived ~ ., data = titan_train)
+
+saveRDS(knn_mod, "knn_mod")
+
+#Prediction class of KNN with Training data
+titan_pred_train <- titan_pred_train |>
+  dplyr::select(Survived, survived_null) |>
+  bind_cols(predict(knn_mod, new_data = titan_train, type = "class")) |>
+  rename(survived_knn = .pred_class)
+
+#Confusion matrix of training Data with KNN
+confusion_null_train <- titan_pred_train |>
+  conf_mat(truth = Survived, estimate = survived_knn)
+
+autoplot(confusion_null_train) +
+  labs(title = "KNN Training Data Confusion Matrix")+
+    geom_label(aes(
+      x = (xmax + xmin) / 2, 
+      y = (ymax + ymin) / 2, 
+      label = c("TN", "FP", "FN", "TP")))
+
+#accuracy of training data for KNN
+accuracy(titan_pred_train, Survived, survived_knn)
+
+# running KNN model with validation data
+titan_pred_valid <- titan_pred_valid |>
+  dplyr::select(Survived, survived_null) |>
+  bind_cols(predict(knn_mod, new_data = titan_valid, type = "class")) |>
+  rename(survived_knn = .pred_class)
+
+# Confusion matrix for KNN with validation data
+confusion_knn_valid <- titan_pred_valid |>
+  conf_mat(truth = Survived, estimate = survived_knn)
+
+knn_valid_conf_plot <- autoplot(confusion_knn_valid) +
+  labs(title = "KNN Validation Data Confusion Matrix")+
+    geom_label(aes(
+      x = (xmax + xmin) / 2, 
+      y = (ymax + ymin) / 2, 
+      label = c("TN", "FP", "FN", "TP")))
+
+saveRDS(confusion_knn_valid, "confusion_knn_valid")
+saveRDS(knn_valid_conf_plot, "knn_valid_conf_plot")
+
+# Accuracy for KNN model for Validation Data
+accuracy_knn_valid <- accuracy(titan_pred_valid, Survived, survived_knn)
+
+saveRDS(accuracy_knn_valid, "accuracy_knn_valid")
+```
+
+
+
+# Model 2 Boosted C5.0
+
+### **Answer:**
+```{r}
+#| echo: false
+
+
+readRDS("c5_valid_conf_plot")
+readRDS("accuracy_c5_valid")|>
+  knitr::kable()
+```
+
+
+After tuning Boosted C5.0 we find 11 Trees has the best accuracy for the trees and thus we run the accuracy with an 86.1% for our validation data. 
+
+### **Code and Comments:**
+
+```{r}
+#| eval: false
+
+#C5 tuning
+set.seed(2483)
+
+c5_folds <- vfold_cv(
+  titan_train,
+  v = 5,
+  strata = Survived)
+
+c5_spec <- boost_tree(
+  trees = tune()) |>
+  set_engine("C5.0") |>
+  set_mode("classification")
+
+c5_workflow <- workflow() |>
+  add_formula(Survived ~ .) |>
+  add_model(c5_spec)
+
+c5_grid <- tibble(
+  trees = c(8, 9, 10, 11, 12, 13, 14)
+)
+
+set.seed(123)
+
+c5_tune <- c5_workflow |>
+  tune_grid(
+    resamples = c5_folds,
+    grid = c5_grid,
+    metrics = metric_set(accuracy)
+  )
+
+c5_tune |>
+  collect_metrics()
+
+#Create Boosted C5.0 Model with Training Data
+c5_mod <- boost_tree(trees = 11) |>
+  set_engine("C5.0") |>
+  set_mode("classification") |>
+  fit(Survived ~ ., data = titan_train)
+
+# Create Prediction Class with Training Data
+titan_pred_train <- titan_pred_train |>
+  dplyr::select(Survived, survived_null, survived_knn) |>
+  bind_cols(predict(c5_mod, new_data = titan_train, type = "class")) |>
+  rename(survived_c5 = .pred_class)
+
+# Create Confusion Matrix with Boosted C5 predictions
+confusion_c5_train <- titan_pred_train |>
+  conf_mat(truth = Survived, estimate = survived_c5)
+
+autoplot(confusion_c5_train) +
+  labs(title = "Boosted C5 Data Confusion Matrix")+
+    geom_label(aes(
+      x = (xmax + xmin) / 2, 
+      y = (ymax + ymin) / 2, 
+      label = c("TN", "FP", "FN", "TP")))
+
+
+#Find accuracy of Boosted C5 model training data predictions
+accuracy(titan_pred_train, Survived, survived_c5)
+
+
+#Apply Boosted C5.0 model for Validation Data
+titan_pred_valid <- titan_pred_valid |>
+  dplyr::select(Survived, survived_null, survived_knn) |>
+  bind_cols(predict(c5_mod, new_data = titan_valid, type = "class")) |>
+  rename(survived_c5 = .pred_class)
+
+#Generate Confusion matrix
+confusion_c5_valid <- titan_pred_valid |>
+  conf_mat(truth = Survived, estimate = survived_c5)
+
+c5_valid_conf_plot <- autoplot(confusion_c5_valid) +
+  labs(title = "Boosted C5 Validation Data Confusion Matrix")+
+    geom_label(aes(
+      x = (xmax + xmin) / 2, 
+      y = (ymax + ymin) / 2, 
+      label = c("TN", "FP", "FN", "TP")))
+
+saveRDS(confusion_c5_valid, "confusion_c5_valid")
+saveRDS(c5_valid_conf_plot, "c5_valid_conf_plot")
+
+#Find Accuracy of Confusion Matrix
+accuracy_c5_valid <- accuracy(titan_pred_valid, Survived, survived_c5)
+
+saveRDS(accuracy_c5_valid ,"accuracy_c5_valid")
+```
+
+# Model 3 Random Forest
+
+### **Answer:**
+```{r}
+#| echo: false
+
+
+readRDS("rf_valid_conf_plot")
+readRDS("accuracy_rf_valid")|>
+  knitr::kable()
+
+```
+
+
+I ran tuning on random forest and got mtry = 4 and min_n = 5 to be our best tuning parameter. I will set the model and I got an accuracy of 84.3%.
+
+
+### **Code and Comments:**
+
+```{r}
+#| eval: false
+
+#Tuned Random Forest
+set.seed(2483)
+
+# 5-fold cross-validation
+rf_folds <- vfold_cv(
+  titan_train,
+  v = 5,
+  strata = Survived
+)
+
+# Random Forest specification
+rf_spec <- rand_forest(
+  trees = 500,
+  mtry = tune(),
+  min_n = tune()
+) |>
+  set_engine("ranger") |>
+  set_mode("classification")
+
+# Workflow
+rf_workflow <- workflow() |>
+  add_formula(Survived ~ .) |>
+  add_model(rf_spec)
+
+# Tuning grid
+rf_grid <- expand_grid(
+  mtry = 1:8,
+  min_n = c(2, 5, 10, 15, 20)
+)
+
+set.seed(123)
+
+# Tune model
+rf_tune <- rf_workflow |>
+  tune_grid(
+    resamples = rf_folds,
+    grid = rf_grid,
+    metrics = metric_set(accuracy)
+  )
+
+# See tuning results
+rf_tune |>
+  collect_metrics()
+
+best_rf <- rf_tune |>
+  select_best(metric = "accuracy")
+
+best_rf
+
+#Use the best parameters for the RF model from the training data
+rf_mod <- rf_workflow |>
+  finalize_workflow(best_rf) |>
+  fit(data = titan_train)
+
+#predict training data with RF model
+titan_pred_train <- titan_pred_train |>
+  dplyr::select(Survived, survived_null, survived_knn, survived_c5) |>
+  bind_cols(predict(rf_mod, new_data = titan_train, type = "class")) |>
+  rename(survived_rf = .pred_class)
+
+#Generate Confusion Matrix
+confusion_rf_train <- titan_pred_train |>
+  conf_mat(truth = Survived, estimate = survived_rf)
+
+autoplot(confusion_rf_train) +
+  labs(title = "Random Forest Training Data Confusion Matrix")+
+    geom_label(aes(
+      x = (xmax + xmin) / 2, 
+      y = (ymax + ymin) / 2, 
+      label = c("TN", "FP", "FN", "TP")))
+
+#Find accuracy
+accuracy(titan_pred_train, Survived, survived_rf)
+
+#Run RF model on validation Data
+titan_pred_valid <- titan_pred_valid |>
+  dplyr::select(Survived, survived_null, survived_knn, survived_c5) |>
+  bind_cols(predict(rf_mod, new_data = titan_valid, type = "class")) |>
+  rename(survived_rf = .pred_class)
+
+# Run confusion matrix
+confusion_rf_valid <- titan_pred_valid |>
+  conf_mat(truth = Survived, estimate = survived_rf)
+
+rf_valid_conf_plot <- autoplot(confusion_rf_valid) +
+  labs(title = "Random Forest Validation Data Confusion Matrix")+
+    geom_label(aes(
+      x = (xmax + xmin) / 2, 
+      y = (ymax + ymin) / 2, 
+      label = c("TN", "FP", "FN", "TP")))
+
+saveRDS(confusion_rf_valid, "confusion_rf_valid")
+saveRDS(rf_valid_conf_plot, "rf_valid_conf_plot")
+
+#Find Accuracy
+accuracy_rf_valid <- accuracy(titan_pred_valid, Survived, survived_rf)
+
+saveRDS(accuracy_rf_valid ,"accuracy_rf_valid")
+
+```
+
+
+# Model 4 Logistic Regression using regularization
+
+### **Answer:**
+```{r}
+#| echo: false
+
+readRDS("lasso_valid_conf_plot")
+readRDS("accuracy_lasso_valid")|>
+  knitr::kable()
+
+```
+
+Our accuracy for the model is 82.5% for LASSO regression model.	From tuning LASSO our penality cost is 0.002395027.
+
+### **Code and Comments:**
+
+```{r}
+#| eval: false
+
+#Tuning for LASSO regularization
+set.seed(2483)
+
+lasso_folds <- vfold_cv(
+  titan_train,
+  v = 5,
+  strata = Survived
+)
+
+# Recipe
+lasso_recipe <- recipe(Survived ~ ., data = titan_train) |>
+  step_dummy(all_nominal_predictors())
+
+# LASSO logistic regression
+lasso_spec <- logistic_reg(
+  penalty = tune(),
+  mixture = 1
+) |>
+  set_engine("glmnet") |>
+  set_mode("classification")
+
+# Workflow
+lasso_workflow <- workflow() |>
+  add_recipe(lasso_recipe) |>
+  add_model(lasso_spec)
+
+lasso_grid <- grid_regular(
+  penalty(range = c(-4, 0)),
+  levels = 30
+)
+
+set.seed(123)
+
+lasso_tune <- lasso_workflow |>
+  tune_grid(
+    resamples = lasso_folds,
+    grid = lasso_grid,
+    metrics = metric_set(accuracy)
+  )
+
+lasso_tune |>
+  
+  collect_metrics()
+best_lasso <- lasso_tune |>
+  select_best(metric = "accuracy")
+
+best_lasso
+
+#Create Lasso Model from training set with best parameters
+lasso_mod <- lasso_workflow |>
+  finalize_workflow(best_lasso) |>
+  fit(data = titan_train)
+
+#Run predictions of LASSO Model on training data
+titan_pred_train <- titan_pred_train |>
+  dplyr::select(Survived, survived_null, survived_knn, 
+               survived_c5, survived_rf) |>
+  bind_cols(predict(lasso_mod, new_data = titan_train,
+      type = "class") |>
+      rename(survived_lasso = .pred_class))
+
+#Generate Confusion Matrix
+confusion_lasso_train <- titan_pred_train |>
+  conf_mat(truth = Survived, estimate = survived_lasso)
+
+autoplot(confusion_lasso_train) +
+  labs(title = "LASSO Regression Training Data Confusion Matrix")+
+    geom_label(aes(
+      x = (xmax + xmin) / 2, 
+      y = (ymax + ymin) / 2, 
+      label = c("TN", "FP", "FN", "TP")))
+
+#Find accuracy of training model for LASSO
+accuracy(titan_pred_train, Survived, survived_lasso)
+
+
+#Run LASSO model on validation Data predictions
+titan_pred_valid <- titan_pred_valid |>
+  dplyr::select(Survived, survived_null, survived_knn, 
+               survived_c5, survived_rf) |>
+  bind_cols(predict(lasso_mod, new_data = titan_valid,
+      type = "class") |>
+      rename(survived_lasso = .pred_class))
+
+#Create confusion Matrix
+confusion_lasso_valid <- titan_pred_valid |>
+  conf_mat(truth = Survived, estimate = survived_lasso)
+
+lasso_valid_conf_plot <- autoplot(confusion_lasso_valid) +
+  labs(title = "LASSO Regression Validation Data Confusion Matrix")+
+    geom_label(aes(
+      x = (xmax + xmin) / 2, 
+      y = (ymax + ymin) / 2, 
+      label = c("TN", "FP", "FN", "TP")))
+
+saveRDS(confusion_lasso_valid ,"confusion_lasso_valid")
+saveRDS(lasso_valid_conf_plot,"lasso_valid_conf_plot")
+
+#Find accuracy of LASSO model on Validation Data
+accuracy_lasso_valid <- accuracy(titan_pred_valid, Survived, survived_lasso)
+
+saveRDS(accuracy_lasso_valid, "accuracy_lasso_valid")
+```
+
+
+# Model 5 Naive Bayes
+
+### **Answer:**
+```{r}
+#| echo: false
+
+readRDS("nb_valid_conf_plot")
+readRDS("accuracy_nb_valid")|>
+  knitr::kable()
+
+```
+
+Our accuracy on the Validation Data is 75.8%. With a tune of smoothness = 0.5 and Laplace = 2.
+
+### **Code and Comments:**
+
+```{r}
+#| eval: false
+
+
+#Tune Naive Bayes
+nb_folds <- vfold_cv(
+  titan_train,
+  v = 5,
+  strata = Survived
+)
+
+# Naive Bayes specification
+nb_spec <- naive_Bayes(
+  smoothness = tune(),
+  Laplace = tune()
+) |>
+  set_engine("naivebayes") |>
+  set_mode("classification")
+
+# Workflow
+nb_workflow <- workflow() |>
+  add_formula(Survived ~ .) |>
+  add_model(nb_spec)
+
+nb_grid <- expand_grid(
+  smoothness = c(0.5, 1, 1.5, 2),
+  Laplace = c(0, 1, 2)
+)
+
+set.seed(123)
+
+nb_tune <- nb_workflow |>
+  tune_grid(
+    resamples = nb_folds,
+    grid = nb_grid,
+    metrics = metric_set(accuracy)
+  )
+
+nb_tune |>
+  collect_metrics()
+
+best_nb <- nb_tune |>
+  select_best(metric = "accuracy")
+
+#Create Naive Bayes Model with training data
+nb_mod <- nb_workflow |>
+  finalize_workflow(best_nb) |>
+  fit(data = titan_train)
+
+#Run predictions of training data with Naive Bayes model
+titan_pred_train <- titan_pred_train |>
+  dplyr::select(Survived, survived_null, survived_knn, 
+               survived_c5, survived_rf, survived_lasso) |>
+  bind_cols(predict(nb_mod, new_data = titan_train,
+                    type = "class") |>
+      rename(survived_nb = .pred_class))
+
+#Create Confusion Matrix
+confusion_nb_train <- titan_pred_train |>
+  conf_mat(truth = Survived, estimate = survived_nb)
+
+autoplot(confusion_nb_train) +
+  labs(title = "Naive Bayes Training Data Confusion Matrix")+
+    geom_label(aes(
+      x = (xmax + xmin) / 2, 
+      y = (ymax + ymin) / 2, 
+      label = c("TN", "FP", "FN", "TP")))
+
+#Find Accuracy
+accuracy(titan_pred_train, Survived, survived_nb)
+
+#Run Naive Bayes Model on Validation Data
+titan_pred_valid <- titan_pred_valid |>
+  dplyr::select(Survived, survived_null, survived_knn, 
+               survived_c5, survived_rf, survived_lasso) |>
+  bind_cols(predict(nb_mod, new_data = titan_valid,
+                    type = "class") |>
+      rename(survived_nb = .pred_class))
+
+#Create Confusion Matrix for Validation Data for Naive Bayes
+confusion_nb_valid <- titan_pred_valid |>
+  conf_mat(truth = Survived, estimate = survived_nb)
+
+nb_valid_conf_plot <- autoplot(confusion_nb_valid) +
+  labs(title = "Naive Bayes Validation Data Confusion Matrix")+
+    geom_label(aes(
+      x = (xmax + xmin) / 2, 
+      y = (ymax + ymin) / 2, 
+      label = c("TN", "FP", "FN", "TP")))
+
+saveRDS(confusion_nb_valid ,"confusion_nb_valid")
+saveRDS(nb_valid_conf_plot,"nb_valid_conf_plot")
+
+#Find accuracy of Naive Bayes Model
+accuracy_nb_valid <- accuracy(titan_pred_valid, Survived, survived_nb)
+
+saveRDS(accuracy_nb_valid, "accuracy_nb_valid")
+
+```
+
+
+
+
+
+
+
+# Accuracy Table  {#accuracy-table}
+```{r}
+#| echo: false
+
+
+readRDS("accuracy_comp")
+```
+We see from our bar graph our Boosted C5.0 has the best accuracy for the validation data. We can see our Naive Bayes, Random Forests and Boosted C5.0 had some overfitting from the training data as well. Only focusing on the validation metrics for our validation data, Boosted C5.0 performed the best. 
+
+## Code and Comments
+```{r}
+#| eval: false
+
+
+#Sum of all accuracies from the training data
+accuracy_table_train <- titan_pred_train |>
+  summarise(
+    Null = accuracy_vec(Survived, survived_null),
+    KNN = accuracy_vec(Survived, survived_knn),
+    Random_Forest = accuracy_vec(Survived, survived_rf),
+    Boosted_C5 = accuracy_vec(Survived, survived_c5),
+    LASSO = accuracy_vec(Survived, survived_lasso),
+    Naive_Bayes = accuracy_vec(Survived, survived_nb)
+  ) |>
+  pivot_longer(
+    everything(),
+    names_to = "Model",
+    values_to = "Accuracy"
+  ) |>
+  arrange(desc(Accuracy))
+
+saveRDS(accuracy_table_train, "accuracy_table_train")
+
+
+#Create table for accuracy of Validation Data
+accuracy_valid <- titan_pred_valid |>
+  summarise(
+    Null = accuracy_vec(Survived, survived_null),
+    KNN = accuracy_vec(Survived, survived_knn),
+    Random_Forest = accuracy_vec(Survived, survived_rf),
+    Boosted_C5 = accuracy_vec(Survived, survived_c5),
+    LASSO = accuracy_vec(Survived, survived_lasso),
+    Naive_Bayes = accuracy_vec(Survived, survived_nb)
+  ) |>
+  pivot_longer(
+    everything(),
+    names_to = "Model",
+    values_to = "Accuracy"
+  ) |>
+  arrange(desc(Accuracy))
+
+saveRDS(accuracy_valid, "accuracy_valid")
+
+#making plot
+# Make C5 naming consistent
+
+# Add dataset labels
+accuracy_table_train <- accuracy_table_train |>
+  mutate(Data = "Training")
+
+accuracy_valid <- accuracy_valid |>
+  mutate(Data = "Validation")
+
+# Combine
+accuracy_compare <- bind_rows(
+  accuracy_table_train,
+  accuracy_valid
+)
+library(ggplot2)
+# Horizontal side-by-side bar plot
+accuracy_comp <- ggplot(
+  accuracy_compare,
+  aes(
+    x = reorder(
+      Model,
+      Accuracy * (Data == "Validation"),
+      FUN = max
+    ),
+    y = Accuracy,
+    fill = Data
+  )
+) +
+  geom_col(
+    position = position_dodge(width = 0.8),
+    width = 0.7
+  ) +
+  geom_text(
+    aes(label = scales::percent(Accuracy, accuracy = 0.1)),
+    position = position_dodge(width = 0.8),
+    hjust = -0.2,
+    size = 3
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Training" = "mediumpurple",
+      "Validation" = "seagreen"
+    )
+  ) +
+  scale_y_continuous(
+    labels = scales::percent_format(),
+    limits = c(0, 1)
+  ) +
+  coord_flip() +
+  labs(
+    title = "Training vs. Validation Accuracy",
+    x = "Model",
+    y = "Accuracy",
+    fill = "Dataset"
+  ) +
+  theme_minimal(base_size = 10)
+
+saveRDS(accuracy_comp, "accuracy_comp")
+```
+
+# Kappa Table  {#kappa-table}
+```{r}
+#| echo: false
+
+
+readRDS("Kappa_comp")
+```
+As we see from the bar graph our bars have the validation data descending by Kappa scores. Our model with the best Kappa is again Boosted C5.0. We will use this model to run the Kaggle Predictions.
+
+## Code and Comments
+```{r}
+#| eval: false
+#Investigate Kappa on training data
+kappa_table <- titan_pred_train |>
+  summarise(
+    Null = kap_vec(Survived, survived_null),
+    KNN = kap_vec(Survived, survived_knn),
+    Random_Forest = kap_vec(Survived, survived_rf),
+    Boosted_C5 = kap_vec(Survived, survived_c5),
+    LASSO = kap_vec(Survived, survived_lasso),
+    Naive_Bayes = kap_vec(Survived, survived_nb)
+  ) |>
+  pivot_longer(
+    everything(),
+    names_to = "Model",
+    values_to = "Kappa"
+  )
+
+kappa_train <- kappa_table |>
+  arrange(desc(Kappa)) |>
+  mutate(round(Kappa, 3))
+
+saveRDS(kappa_train, "kappa_train")
+
+#Investigate Kappa on Validation data predictions
+kappa_valid <- titan_pred_valid |>
+  summarise(
+    Null = kap_vec(Survived, survived_null),
+    KNN = kap_vec(Survived, survived_knn),
+    Random_Forest = kap_vec(Survived, survived_rf),
+    Boosted_C5 = kap_vec(Survived, survived_c5),
+    LASSO = kap_vec(Survived, survived_lasso),
+    Naive_Bayes = kap_vec(Survived, survived_nb)
+  ) |>
+  pivot_longer(
+    everything(),
+    names_to = "Model",
+    values_to = "Kappa"
+  )
+
+kappa_valid <- kappa_valid |>
+  arrange(desc(Kappa))
+
+saveRDS(kappa_valid, "kappa_valid")
+
+# Add dataset labels
+kappa_train <- kappa_train |>
+  mutate(Data = "Training")
+
+kappa_valid <- kappa_valid |>
+  mutate(Data = "Validation")
+
+# Combine training and validation Kappa
+kappa_compare <- bind_rows(
+  kappa_train,
+  kappa_valid
+)
+
+# Create horizontal side-by-side bar plot
+Kappa_comp <-ggplot(
+  kappa_compare,
+  aes(
+    x = reorder(
+      Model,
+      Kappa * (Data == "Validation"),
+      FUN = max
+    ),
+    y = Kappa,
+    fill = Data
+  )
+) +
+  geom_col(
+    position = position_dodge(width = 0.8),
+    width = 0.7
+  ) +
+  geom_text(
+    aes(label = round(Kappa, 3)),
+    position = position_dodge(width = 0.8),
+    hjust = -0.2,
+    size = 3
+  ) +
+  scale_fill_manual(
+    values = c(
+      "Training" = "mediumpurple",
+      "Validation" = "seagreen"
+    )
+  ) +
+  coord_flip() +
+  labs(
+    title = "Training vs. Validation Kappa",
+    x = "Model",
+    y = "Kappa",
+    fill = "Dataset"
+  ) +
+  theme_minimal(base_size = 10)
+
+saveRDS(Kappa_comp, "Kappa_comp")
+```
+
+# ROC Code Question 3 {#ROC}
+Have to convert to predicted class to probabilities. From Chat GPT.
+
+```{r}
+#| eval: false
+
+#Create ROC probabilities
+titan_roc <- tibble(
+  Survived = titan_valid$Survived,
+
+  Null = predict(null_mod, titan_valid, type = "prob")$.pred_1,
+
+  KNN = predict(knn_mod, titan_valid, type = "prob")$.pred_1,
+
+  C5.0 = predict(c5_mod, titan_valid, type = "prob")$.pred_1,
+
+  RF = predict(rf_mod, titan_valid, type = "prob")$.pred_1,
+
+  Logistic = predict(lasso_mod, titan_valid, type = "prob")$.pred_1,
+
+  NB = predict(nb_mod, titan_valid, type = "prob")$.pred_1
+)
+# Actual outcome
+actual <- titan_roc$Survived
+
+# Predicted probabilities from each model
+# Replace these object names with your actual prediction objects
+
+roc_null <- roc(actual, titan_roc$Null)
+roc_lasso <- roc(actual, titan_roc$Logistic)
+roc_knn   <- roc(actual,titan_roc$KNN)
+roc_nb    <- roc(actual, titan_roc$NB)
+roc_rf    <- roc(actual, titan_roc$RF)
+roc_c5   <- roc(actual, titan_roc$C5.0)
+
+titan_roc_long <- titan_roc |>
+  pivot_longer(
+    cols = -Survived,
+    names_to = "Model",
+    values_to = ".pred_1"
+  )
+
+# Calculate ROC curves for every model
+roc_results <- titan_roc_long |>
+  group_by(Model) |>
+  roc_curve(
+    truth = Survived,
+    .pred_1,
+    event_level = "second"
+  )
+
+# Plot all ROC curves
+ROC_model <- autoplot(roc_results) +
+  labs(
+    title = "ROC Curves for Titanic Classification Models",
+    x = "1 - Specificity",
+    y = "Sensitivity"
+  ) +
+  theme_minimal()
+
+saveRDS(ROC_model, "ROC_model")
+
+#Create table of AUC's for all models
+AUC_model <- titan_roc_long |>
+  group_by(Model) |>
+  roc_auc(
+    truth = Survived,
+    .pred_1,
+    event_level = "second"
+  ) |>
+  arrange(desc(.estimate))
+
+AUC_model <- AUC_model |>
+  mutate(AUC = round(.estimate, 3))|>
+  dplyr::select(Model, AUC)|>
+  knitr::kable()
+
+saveRDS(AUC_model, "AUC_model")
+
+```
+
+
+# Best Model {#best-model}
+The best output is **Boosted C5.0** with the parameter of 11 trees. Our Kappa and Accuracy for this model for the whole training data is 0.7404776 for our Kappa and an accuracy of 87.8%.	
+
+## Code
+```{r}
+#| eval: false
+
+c5_mod_final <- boost_tree(trees = 11) |>
+  set_engine("C5.0") |>
+  set_mode("classification") |>
+  fit(Survived ~ ., data = titanic_train)
+
+titanic_train_prediction <- titanic_train |>
+  dplyr::select(Survived) |>
+  bind_cols(predict(c5_mod_final, new_data = titanic_train,
+                    type = "class") |>
+      rename(pred_full = .pred_class))
+
+accuracy(titanic_train_prediction, Survived, pred_full)
+summarise(KAPPA = kap_vec(Survived, pred_full), titanic_train_prediction)
+
+```
+
+
+
+# Submission File
+Code for uploading my predicted outcomes on Kaggle.
+
+```{r}
+#| eval: false
+
+
+titanic_test_prediction <- titanic_test |>
+  dplyr::select(PassengerId) |>
+  bind_cols(predict(c5_mod_final, new_data = titanic_test,
+                    type = "class") |>
+      rename(Survived = .pred_class))
+submission <- titanic_test_prediction
+
+saveRDS(submission, "submission")
+write.csv(submission, "submission.csv", row.names = F)
+
+```
