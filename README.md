@@ -168,23 +168,23 @@ This project gave me experience working through a complete classification workfl
 
 Some of my main takeaways were:
 
-Establishing a baseline before comparing more complex models
+- Establishing a baseline before comparing more complex models
 
-Separating training, validation, and test data
+- Separating training, validation, and test data
 
-Using cross-validation for hyperparameter tuning
+-  Using cross-validation for hyperparameter tuning
 
-Applying different preprocessing strategies depending on the model
+-  Applying different preprocessing strategies depending on the model
 
-Comparing models with more than one performance metric
+-  Comparing models with more than one performance metric
 
-Recognizing potential overfitting by comparing training and validation results
+-  Recognizing potential overfitting by comparing training and validation results
 
-Refitting a selected model using the complete training dataset
+-  Refitting a selected model using the complete training dataset
 
-Generating predictions for previously unseen observations
+-  Generating predictions for previously unseen observations
 
-Preparing predictions for a Kaggle competition
+-  Preparing predictions for a Kaggle competition
 
 Most importantly, this project reinforced that the model with the highest training accuracy is not necessarily the model that will perform best on unseen data.
 
